@@ -132,33 +132,38 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
     return Vector4f(v3.x(), v3.y(), v3.z(), w);
 }
 
+// 顶点变换 + 光栅化
+// 对于实例而言， pos_buffer = 0, ind_buffer = 1
 void rst::rasterizer::draw(rst::pos_buf_id pos_buffer, rst::ind_buf_id ind_buffer, rst::Primitive type)
 {
     if (type != rst::Primitive::Triangle)
     {
         throw std::runtime_error("Drawing primitives other than triangle is not implemented yet!");
     }
-    auto& buf = pos_buf[pos_buffer.pos_id];
-    auto& ind = ind_buf[ind_buffer.ind_id];
+    auto& buf = pos_buf[pos_buffer.pos_id]; // 顶点坐标列表 std::vector<Eigen::Vector3f>
+    auto& ind = ind_buf[ind_buffer.ind_id]; // 索引列表 std::vector<Eigen::Vector3i>
 
     float f1 = (100 - 0.1) / 2.0;
     float f2 = (100 + 0.1) / 2.0;
 
     Eigen::Matrix4f mvp = projection * view * model;
-    for (auto& i : ind) // traverse each triangle of a object
+    for (auto& i : ind) // 遍历物体中的每一个三角形的顶点索引，这里的 i : <Eigen::Vector3i>，对应一个三角形
     {
         Triangle t;
 
+        // MVP 变换
         Eigen::Vector4f v[] = {
                 mvp * to_vec4(buf[i[0]], 1.0f),
                 mvp * to_vec4(buf[i[1]], 1.0f),
                 mvp * to_vec4(buf[i[2]], 1.0f)
         };
 
+        // 透视除法
         for (auto& vec : v) {
             vec /= vec.w();
         }
 
+        // 视口变换
         for (auto & vert : v)
         {
             vert.x() = 0.5*width*(vert.x()+1.0);
@@ -168,19 +173,21 @@ void rst::rasterizer::draw(rst::pos_buf_id pos_buffer, rst::ind_buf_id ind_buffe
 
         for (int i = 0; i < 3; ++i)
         {
-            t.setVertex(i, v[i].head<3>());
+            t.setVertex(i, v[i].head<3>()); // 将变换后的第 i 个顶点保存到三角形对象 t 中
             //t.setVertex(i, v[i].head<3>());
             //t.setVertex(i, v[i].head<3>());
         }
 
+        // 设置三角形顶点颜色
         t.setColor(0, 255.0,  0.0,  0.0);
         t.setColor(1, 0.0  ,255.0,  0.0);
         t.setColor(2, 0.0  ,  0.0,255.0);
 
-        rasterize_wireframe(t);
+        rasterize_wireframe(t); // 光栅化
     }
 }
 
+// 画三角形的三条边
 void rst::rasterizer::rasterize_wireframe(const Triangle& t)
 {
     draw_line(t.c(), t.a());

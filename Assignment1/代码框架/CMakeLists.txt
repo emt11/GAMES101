@@ -1,11 +1,18 @@
-cmake_minimum_required(VERSION 3.10)
-project(Rasterizer)
+cmake_minimum_required(VERSION 3.20)
+project(Rasterizer LANGUAGES CXX)
 
-find_package(OpenCV REQUIRED)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_STANDARD 17)
+find_package(OpenCV CONFIG REQUIRED)
 
-include_directories(/usr/local/include)
+add_executable(Rasterizer
+    main.cpp
+    rasterizer.cpp
+    rasterizer.hpp
+    Triangle.cpp
+    Triangle.hpp
+)
 
-add_executable(Rasterizer main.cpp rasterizer.hpp rasterizer.cpp Triangle.hpp Triangle.cpp)
-target_link_libraries(Rasterizer ${OpenCV_LIBRARIES})
+target_compile_features(Rasterizer PRIVATE cxx_std_23)
+target_include_directories(Rasterizer PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(Rasterizer PRIVATE ${OpenCV_LIBRARIES})

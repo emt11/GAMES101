@@ -58,6 +58,7 @@ class rasterizer
     void set_view(const Eigen::Matrix4f& v);
     void set_projection(const Eigen::Matrix4f& p);
 
+    // 将屏幕像素点 (x, y) 设为 (r, g, b) 的颜色，并写入相应的帧缓冲区位置
     void set_pixel(const Eigen::Vector3f& point, const Eigen::Vector3f& color);
 
     void clear(Buffers buff);
@@ -75,11 +76,11 @@ class rasterizer
     Eigen::Matrix4f view;
     Eigen::Matrix4f projection;
 
-    std::map<int, std::vector<Eigen::Vector3f>> pos_buf; // shape: {object_id, {vertex0, vertex1, vertex2, vertex3...}}, 其中 vertexi: {x, y, z}
-    std::map<int, std::vector<Eigen::Vector3i>> ind_buf; // shape: {object_id, {id_vertex0, id_vertex1, id_vertex2}} // 物品对应的三角形 id
+    std::map<int, std::vector<Eigen::Vector3f>> pos_buf; // 顶点缓冲区
+    std::map<int, std::vector<Eigen::Vector3i>> ind_buf; // 索引缓冲区
 
-    std::vector<Eigen::Vector3f> frame_buf; // 一维数组，存储屏幕所有像素的 RGB 颜色
-    std::vector<float> depth_buf; // 一维数组，存储所有像素的深度 Z 值，用于遮挡剔除
+    std::vector<Eigen::Vector3f> frame_buf; // 帧缓冲对象，用于存储需要在屏幕上绘制的颜色数据
+    std::vector<float> depth_buf; // Buffer-Z
     int get_index(int x, int y);
     
     int width, height;

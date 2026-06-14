@@ -50,7 +50,7 @@ int main(){
     Eigen::Matrix3f m1, m2;
 
     // 弧度 = 角度 * pi / 180
-    double radian = std::numbers::pi / 4.0;
+    double radian = 45 * std::numbers::pi / 180;
 
     // 逆时针旋转 45°
     m1 << std::cos(radian), -std::sin(radian),  0, 
