@@ -2,9 +2,9 @@
 #include<Eigen/Core>
 #include<Eigen/Dense>
 #include<iostream>
+#include<print>
 
-int main(){
-
+void test() {
     // Basic Example of cpp
     std::cout << "Example of cpp \n";
     float a = 1.0, b = 2.0;
@@ -43,6 +43,27 @@ int main(){
     // matrix scalar multiply i * 2.0
     // matrix multiply i * j
     // matrix multiply vector i * v
+}
+
+int main(){
+    Eigen::Vector3f p(2.0f, 1.0f, 1.0f), res;
+    Eigen::Matrix3f m1, m2;
+
+    // 弧度 = 角度 * pi / 180
+    double radian = std::numbers::pi / 4.0;
+
+    // 逆时针旋转 45°
+    m1 << std::cos(radian), -std::sin(radian),  0, 
+        std::sin(radian), std::cos(radian), 0,
+        0, 0, 1;
+    // 平移 (1, 2)        
+    m2 << 1, 0, 1,
+          0, 1, 2, 
+          0, 0, 1;
+
+    res = m2 * m1 * p;
+
+    std::cout << res << std::endl;
 
     return 0;
 }
