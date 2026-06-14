@@ -1,0 +1,66 @@
+# CMake build directories
+**/build/
+**/out/
+**/cmake-build-*/
+**/CMakeFiles/
+**/Testing/
+
+# CMake generated files
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/CTestTestfile.cmake
+**/Makefile
+**/compile_commands.json
+**/install_manifest.txt
+
+# Visual Studio
+**/.vs/
+**/Debug/
+**/Release/
+**/RelWithDebInfo/
+**/MinSizeRel/
+**/x64/
+**/x86/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.pdb
+*.ilk
+*.idb
+*.tlog
+
+# Compiled binaries and libraries
+*.o
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app/
+
+# Do not add *.obj here: this project contains Wavefront model assets.
+
+# Editor and IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
