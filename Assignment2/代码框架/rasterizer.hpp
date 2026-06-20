@@ -93,8 +93,12 @@ namespace rst
         std::vector<Eigen::Vector3f> frame_buf;
 
         std::vector<float> depth_buf;
+        std::vector<float> ss_depth_buf; // super-sampling 2x2
+        std::vector<Eigen::Vector3f> ss_color_buf; // super-sampling 2x2
         int get_index(int x, int y);
-
+        static constexpr int row_sample_rate = 2;
+        static constexpr int col_sample_rate = 2;
+        static constexpr int sample_count = row_sample_rate * col_sample_rate;
         int width, height;
 
         int next_id = 0;

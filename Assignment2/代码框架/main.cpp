@@ -28,10 +28,44 @@ Eigen::Matrix4f get_model_matrix(float rotation_angle)
     return model;
 }
 
-Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
+/// @brief 投影变换(Projection)
+/// @param eye_fov // 垂直可视角度
+/// @param aspect_ratio XY 平面的宽高比
+/// @param zNear 相机离近平面的 Z 轴距离
+/// @param zFar 相机离原平面的 Z 轴距离
+/// @return 投影变换矩阵
+Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
+                                      float zNear, float zFar)
 {
-    // TODO: Copy-paste your implementation from the previous assignment.
-    Eigen::Matrix4f projection;
+    // Students will implement this function
+    Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
+
+    // TODO: Implement this function
+    // Create the projection matrix for the given parameters.
+    // Then return it.
+    Eigen::Matrix4f perspective, orthographic_scale, orthographic_transfrom;
+    perspective << zNear, 0, 0, 0,
+                   0, zNear, 0, 0,
+                   0, 0, zNear + zFar, -zNear * zFar,
+                   0, 0, 1, 0;
+    
+    float xL, xR, yT, yB;
+    float forY = eye_fov * std::numbers::pi / 180.0;
+    yT = std::tan(forY / 2) * std::abs(zNear);
+    yB = -yT;
+    xR = yT * aspect_ratio;
+    xL = -xR;
+
+    orthographic_scale << 2 / (xR - xL), 0, 0, 0,
+                          0, 2 / (yT - yB), 0, 0,
+                          0, 0, 2 / (zNear - zFar), 0,
+                          0, 0, 0, 1;
+    orthographic_transfrom << 1, 0, 0, -(xR + xL) / 2,
+                              0, 1, 0, -(yT + yB) / 2,
+                              0, 0, 1, -(zNear + zFar) / 2,
+                              0, 0, 0, 1;
+
+    projection = orthographic_scale * orthographic_transfrom * perspective * projection;
 
     return projection;
 }
@@ -92,7 +126,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45, 1, -0.1, -50));
 
         r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
         cv::Mat image(700, 700, CV_32FC3, r.frame_buffer().data());
@@ -110,7 +144,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45, 1, -0.1, -50));
 
         r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
 
