@@ -149,7 +149,7 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
     return Vector4f(v3.x(), v3.y(), v3.z(), w);
 }
 
-static bool insideTriangle(int x, int y, const Vector4f* _v){
+static bool insideTriangle(float x, float y, const Vector4f* _v){
     Vector3f v[3];
     for(int i=0;i<3;i++)
         v[i] = {_v[i].x(),_v[i].y(), 1.0};
@@ -175,6 +175,7 @@ void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
     float f1 = (50 - 0.1) / 2.0;
     float f2 = (50 + 0.1) / 2.0;
 
+    // 重心坐标在投影后会发生改变，所以需要在投影前就获取重心插值所需要的数据
     Eigen::Matrix4f mvp = projection * view * model;
     for (const auto& t:TriangleList)
     {
@@ -192,18 +193,21 @@ void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
             return v.template head<3>();
         });
 
+        // MVP
         Eigen::Vector4f v[] = {
                 mvp * t->v[0],
                 mvp * t->v[1],
                 mvp * t->v[2]
         };
-        //Homogeneous division
+        // Homogeneous division，这里没有处理 w
         for (auto& vec : v) {
             vec.x()/=vec.w();
             vec.y()/=vec.w();
             vec.z()/=vec.w();
         }
 
+        // 把法线从模型空间变换到观察空间
+        // 法线是方向，不是位置。如果模型有非均匀缩放，直接乘 view * model 会把法线「压歪」
         Eigen::Matrix4f inv_trans = (view * model).inverse().transpose();
         Eigen::Vector4f n[] = {
                 inv_trans * to_vec4(t->normal[0], 0.0f),
@@ -279,8 +283,72 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
     // Use: payload.view_pos = interpolated_shadingcoords;
     // Use: Instead of passing the triangle's color directly to the frame buffer, pass the color to the shaders first to get the final color;
     // Use: auto pixel_color = fragment_shader(payload);
-
- 
+    
+    /*
+        重心插值
+        auto[alpha, beta, gamma] = computeBarycentric2D(cx, cy, t.v);
+        float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+        float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+        z_interpolated *= w_reciprocal;
+    */
+    // Rasterizer
+    // 计算三角形所在的最大矩形
+    float left = width - 1, right = 0, bottom = height - 1, top = 0; // 注意这里原点是左上角，所以 bottom 是上面， top 是下面
+    left = std::max(std::floor(std::min({left, t.a().x(), t.b().x(), t.c().x()})), 0.f);
+    right = std::min(std::ceil(std::max({right, t.a().x(), t.b().x(), t.c().x()})), static_cast<float>(width - 1));
+    bottom = std::max(std::floor(std::min({bottom, t.a().y(), t.b().y(), t.c().y()})), 0.f);
+    top = std::min(std::ceil(std::max({top, t.a().y(), t.b().y(), t.c().y()})), static_cast<float>(height - 1));
+    // 遍历每个像素
+    for (int x = left; x <= right; ++x) {
+        for (int y = bottom; y <= top; ++y) {
+            float cx = x + 0.5f, cy = y + 0.5f;
+            if (!insideTriangle(cx, cy, t.v)) continue;
+            // 1 计算屏幕空间重心坐标，这里的 (a, b, y) 被透视投影扭曲了，不能直接用
+            auto[alpha, beta, gamma] = computeBarycentric2D(cx, cy, t.v);
+            // 2 Z 是观察空间的深度
+            float Z = 1.0 / (alpha / t.v[0].w() + beta / t.v[1].w() + gamma / t.v[2].w());
+            // 2.5 深度插值
+            float zp = alpha * t.v[0].z() / t.v[0].w() + 
+                        beta * t.v[1].z() / t.v[1].w() + 
+                        gamma * t.v[2].z() / t.v[2].w();
+            zp *= Z;
+            int pixel_idx = width * (height - 1 - y) + x;
+            if (zp > depth_buf[pixel_idx]) {
+                depth_buf[pixel_idx] = zp;
+                // 3 Interpolate the attributes: color, normal, texcoords, shadingcoords
+                float inv_Z = 1 / Z;
+                auto interpolated_color = interpolate(alpha, beta, gamma,
+                                                Vector3f(t.color[0] / t.v[0].w()),
+                                                Vector3f(t.color[1] / t.v[1].w()),
+                                                Vector3f(t.color[2] / t.v[2].w()),
+                                                inv_Z
+                                            );
+                auto interpolated_normal = interpolate(alpha, beta, gamma,
+                                                Vector3f(t.normal[0] / t.v[0].w()),
+                                                Vector3f(t.normal[1] / t.v[1].w()),
+                                                Vector3f(t.normal[2] / t.v[2].w()),
+                                                inv_Z
+                                            );
+                auto interpolated_texcoords = interpolate(alpha, beta, gamma,
+                                                Vector2f(t.tex_coords[0] / t.v[0].w()),
+                                                Vector2f(t.tex_coords[1] / t.v[1].w()),
+                                                Vector2f(t.tex_coords[2] / t.v[2].w()),
+                                                inv_Z
+                                            );
+                auto interpolated_shadingcoords = interpolate(alpha, beta, gamma,
+                                                Vector3f(view_pos[0] / t.v[0].w()),
+                                                Vector3f(view_pos[1] / t.v[1].w()),
+                                                Vector3f(view_pos[2] / t.v[2].w()),
+                                                inv_Z
+                                            );
+                fragment_shader_payload payload(interpolated_color, interpolated_normal.normalized(), 
+                                                interpolated_texcoords, texture ? &*texture : nullptr);
+                payload.view_pos = interpolated_shadingcoords;
+                auto pixel_color = fragment_shader(payload);
+                set_pixel(Vector2i{x, y}, pixel_color);
+            }
+        }
+    }
 }
 
 void rst::rasterizer::set_model(const Eigen::Matrix4f& m)
@@ -306,7 +374,7 @@ void rst::rasterizer::clear(rst::Buffers buff)
     }
     if ((buff & rst::Buffers::Depth) == rst::Buffers::Depth)
     {
-        std::fill(depth_buf.begin(), depth_buf.end(), std::numeric_limits<float>::infinity());
+        std::fill(depth_buf.begin(), depth_buf.end(), -std::numeric_limits<float>::infinity());
     }
 }
 
@@ -320,13 +388,12 @@ rst::rasterizer::rasterizer(int w, int h) : width(w), height(h)
 
 int rst::rasterizer::get_index(int x, int y)
 {
-    return (height-y)*width + x;
+    return (height - y - 1) * width + x;
 }
 
 void rst::rasterizer::set_pixel(const Vector2i &point, const Eigen::Vector3f &color)
 {
-    //old index: auto ind = point.y() + point.x() * width;
-    int ind = (height-point.y())*width + point.x();
+    int ind = (height - 1 - point.y()) * width + point.x();
     frame_buf[ind] = color;
 }
 

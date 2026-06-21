@@ -47,10 +47,47 @@ Eigen::Matrix4f get_model_matrix(float angle)
     return translate * rotation * scale;
 }
 
-Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
+/// @brief 投影变换(Projection)
+/// @param eye_fov // 垂直可视角度
+/// @param aspect_ratio XY 平面的宽高比
+/// @param zNear 相机离近平面的 Z 轴距离
+/// @param zFar 相机离原平面的 Z 轴距离
+/// @return 投影变换矩阵
+Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
+                                      float zNear, float zFar)
 {
-    // TODO: Use the same projection matrix from the previous assignments
+    // Students will implement this function
 
+    Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
+
+    // TODO: Implement this function
+    // Create the projection matrix for the given parameters.
+    // Then return it.
+    Eigen::Matrix4f perspective, orthographic_scale, orthographic_transfrom;
+    perspective << zNear, 0, 0, 0,
+                   0, zNear, 0, 0,
+                   0, 0, zNear + zFar, -zNear * zFar,
+                   0, 0, 1, 0;
+    
+    float xL, xR, yT, yB;
+    float forY = eye_fov * std::numbers::pi / 180.0;
+    yT = std::tan(forY / 2) * std::abs(zNear);
+    yB = -yT;
+    xR = yT * aspect_ratio;
+    xL = -xR;
+
+    orthographic_scale << 2 / (xR - xL), 0, 0, 0,
+                          0, 2 / (yT - yB), 0, 0,
+                          0, 0, 2 / (zNear - zFar), 0,
+                          0, 0, 0, 1;
+    orthographic_transfrom << 1, 0, 0, -(xR + xL) / 2,
+                              0, 1, 0, -(yT + yB) / 2,
+                              0, 0, 1, -(zNear + zFar) / 2,
+                              0, 0, 0, 1;
+
+    projection = orthographic_scale * orthographic_transfrom * perspective * projection;
+
+    return projection;
 }
 
 Eigen::Vector3f vertex_shader(const vertex_shader_payload& payload)
@@ -84,7 +121,7 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     if (payload.texture)
     {
         // TODO: Get the texture value at the texture coordinates of the current fragment
-
+        return_color = payload.texture->getColorBilinear(payload.tex_coords.x(), payload.tex_coords.y());
     }
     Eigen::Vector3f texture_color;
     texture_color << return_color.x(), return_color.y(), return_color.z();
@@ -107,12 +144,26 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f normal = payload.normal;
 
     Eigen::Vector3f result_color = {0, 0, 0};
+    // 环境光只需要加一次即可
+    Vector3f ambient = ka.cwiseProduct(amb_light_intensity); // ambient
+    result_color += ambient;
 
     for (auto& light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
         // components are. Then, accumulate that result on the *result_color* object.
+        Vector3f light_dir = light.position - point; // l: 着色点指向光源的向量
+        float r = light_dir.norm(); // 距离
+        light_dir.normalize(); // 方向向量
+        Vector3f I_div_r2 = (light.intensity) / (r * r);
+        Vector3f diffuse = kd.cwiseProduct(I_div_r2) * std::max(0.f, normal.dot(light_dir)); // diffuse
 
+        // l 和 v 的半程向量 h
+        Vector3f view_dir = (eye_pos - point).normalized();
+        Vector3f h = (light_dir + view_dir).normalized();
+        Vector3f specular = ks.cwiseProduct(I_div_r2) * std::pow(std::max(0.f, normal.dot(h)), p); // specular
+
+        result_color += diffuse + specular;
     }
 
     return result_color * 255.f;
@@ -128,8 +179,8 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
     auto l2 = light{{-20, 20, 0}, {500, 500, 500}};
 
     std::vector<light> lights = {l1, l2};
-    Eigen::Vector3f amb_light_intensity{10, 10, 10};
-    Eigen::Vector3f eye_pos{0, 0, 10};
+    Eigen::Vector3f amb_light_intensity{10, 10, 10}; // 环境光强度
+    Eigen::Vector3f eye_pos{0, 0, 10}; // 观察者位置
 
     float p = 150;
 
@@ -138,16 +189,29 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f normal = payload.normal;
 
     Eigen::Vector3f result_color = {0, 0, 0};
+    // 环境光只需要加一次即可
+    Vector3f ambient = ka.cwiseProduct(amb_light_intensity); // ambient
+    result_color += ambient;
     for (auto& light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
         // components are. Then, accumulate that result on the *result_color* object.
-        
+        Vector3f light_dir = light.position - point; // l: 着色点指向光源的向量
+        float r = light_dir.norm(); // 距离
+        light_dir.normalize(); // 方向向量
+        Vector3f I_div_r2 = (light.intensity) / (r * r);
+        Vector3f diffuse = kd.cwiseProduct(I_div_r2) * std::max(0.f, normal.dot(light_dir)); // diffuse
+
+        // l 和 v 的半程向量 h
+        Vector3f view_dir = (eye_pos - point).normalized();
+        Vector3f h = (light_dir + view_dir).normalized();
+        Vector3f specular = ks.cwiseProduct(I_div_r2) * std::pow(std::max(0.f, normal.dot(h)), p); // specular
+
+        result_color += diffuse + specular;
     }
 
     return result_color * 255.f;
 }
-
 
 
 Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payload)
@@ -168,7 +232,7 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payl
 
     Eigen::Vector3f color = payload.color; 
     Eigen::Vector3f point = payload.view_pos;
-    Eigen::Vector3f normal = payload.normal;
+    Eigen::Vector3f n = payload.normal;
 
     float kh = 0.2, kn = 0.1;
     
@@ -182,15 +246,50 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payl
     // Vector ln = (-dU, -dV, 1)
     // Position p = p + kn * n * h(u,v)
     // Normal n = normalize(TBN * ln)
-
+    Vector3f t(n.x() * n.y() / std::sqrt(n.x() * n.x()  + n.z() * n.z()), 
+                std::sqrt(n.x() * n.x() + n.z() * n.z()),
+                n.z() * n.y() / std::sqrt(n.x() * n.x() + n.z() * n.z())
+            );
+    Vector3f b = n.cross(t);
+    Matrix3f TBN;
+    TBN.col(0) = t;
+    TBN.col(1) = b;
+    TBN.col(2) = n;
+    // 高度图采样函数，这里取灰度值作为高度
+    auto h = [&](float u, float v) -> float {
+        return payload.texture->getColor(u, v).norm();  // 取灰度值作为高度
+    };
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float tex_h = payload.texture->height;
+    float tex_w = payload.texture->width;
+    // 计算相邻纹理步长的差分
+    auto dU = kh * kn * (h(u + 1.f / tex_w, v) - h(u, v)); 
+    auto dV = kh * kn * (h(u, v + 1.f / tex_h) - h(u, v));
+    Vector3f ln(-dU, -dV, 1.f);
+    point = point + kn * n * h(u, v);
+    n = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
-
+    // 环境光只需要加一次即可
+    Vector3f ambient = ka.cwiseProduct(amb_light_intensity); // ambient
+    result_color += ambient;
     for (auto& light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
         // components are. Then, accumulate that result on the *result_color* object.
+        Vector3f light_dir = light.position - point; // l: 着色点指向光源的向量
+        float r = light_dir.norm(); // 距离
+        light_dir.normalize(); // 方向向量
+        Vector3f I_div_r2 = (light.intensity) / (r * r);
+        Vector3f diffuse = kd.cwiseProduct(I_div_r2) * std::max(0.f, n.dot(light_dir)); // diffuse
 
+        // l 和 v 的半程向量 h
+        Vector3f view_dir = (eye_pos - point).normalized();
+        Vector3f h = (light_dir + view_dir).normalized();
+        Vector3f specular = ks.cwiseProduct(I_div_r2) * std::pow(std::max(0.f, n.dot(h)), p); // specular
+
+        result_color += diffuse + specular;
 
     }
 
@@ -230,10 +329,32 @@ Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload& payload)
     // dV = kh * kn * (h(u,v+1/h)-h(u,v))
     // Vector ln = (-dU, -dV, 1)
     // Normal n = normalize(TBN * ln)
-
+    Vector3f n = normal;
+    Vector3f t(n.x() * n.y() / std::sqrt(n.x() * n.x()  + n.z() * n.z()), 
+                std::sqrt(n.x() * n.x() + n.z() * n.z()),
+                n.z() * n.y() / std::sqrt(n.x() * n.x() + n.z() * n.z())
+            );
+    Vector3f b = n.cross(t);
+    Matrix3f TBN;
+    TBN.col(0) = t;
+    TBN.col(1) = b;
+    TBN.col(2) = n;
+    // 高度图采样函数，这里取灰度值作为高度
+    auto h = [&](float u, float v) -> float {
+        return payload.texture->getColor(u, v).norm();  // 取灰度值作为高度
+    };
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float tex_h = payload.texture->height;
+    float tex_w = payload.texture->width;
+    // 计算相邻纹理步长的差分
+    auto dU = kh * kn * (h(u + 1.f / tex_w, v) - h(u, v)); 
+    auto dV = kh * kn * (h(u, v + 1.f / tex_h) - h(u, v));
+    Vector3f ln(-dU, -dV, 1.f);
+    n = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
-    result_color = normal;
+    result_color = n;
 
     return result_color * 255.f;
 }
@@ -247,16 +368,18 @@ int main(int argc, const char** argv)
 
     std::string filename = "output.png";
     objl::Loader Loader;
-    std::string obj_path = "../models/spot/";
+    std::string obj_path = "./models/spot/";
+    // std::string obj_path = "./models/rock/";
 
     // Load .obj File
-    bool loadout = Loader.LoadFile("../models/spot/spot_triangulated_good.obj");
-    for(auto mesh:Loader.LoadedMeshes)
+    bool loadout = Loader.LoadFile("./models/spot/spot_triangulated_good.obj");
+    // bool loadout = Loader.LoadFile("./models/rock/rock.obj");
+    for(auto mesh:Loader.LoadedMeshes) // 遍历每个 3D 模型
     {
-        for(int i=0;i<mesh.Vertices.size();i+=3)
+        for(int i=0;i<mesh.Vertices.size();i+=3) // 模型中的每一个三角形
         {
             Triangle* t = new Triangle();
-            for(int j=0;j<3;j++)
+            for(int j=0;j<3;j++) // 三角形的三个顶点
             {
                 t->setVertex(j,Vector4f(mesh.Vertices[i+j].Position.X,mesh.Vertices[i+j].Position.Y,mesh.Vertices[i+j].Position.Z,1.0));
                 t->setNormal(j,Vector3f(mesh.Vertices[i+j].Normal.X,mesh.Vertices[i+j].Normal.Y,mesh.Vertices[i+j].Normal.Z));
@@ -269,6 +392,7 @@ int main(int argc, const char** argv)
     rst::rasterizer r(700, 700);
 
     auto texture_path = "hmap.jpg";
+    // auto texture_path = "rock.png";
     r.set_texture(Texture(obj_path + texture_path));
 
     std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = phong_fragment_shader;
@@ -282,7 +406,8 @@ int main(int argc, const char** argv)
         {
             std::cout << "Rasterizing using the texture shader\n";
             active_shader = texture_fragment_shader;
-            texture_path = "spot_texture.png";
+            texture_path = "spot_texture_128x128.png";
+            // texture_path = "rock.png";
             r.set_texture(Texture(obj_path + texture_path));
         }
         else if (argc == 3 && std::string(argv[2]) == "normal")
@@ -320,7 +445,7 @@ int main(int argc, const char** argv)
         r.clear(rst::Buffers::Color | rst::Buffers::Depth);
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45.0, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45.0, 1, -0.1, -50));
 
         r.draw(TriangleList);
         cv::Mat image(700, 700, CV_32FC3, r.frame_buffer().data());
@@ -338,7 +463,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45.0, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45.0, 1, -0.1, -50));
 
         //r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
         r.draw(TriangleList);
