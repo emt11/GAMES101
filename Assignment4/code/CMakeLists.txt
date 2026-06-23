@@ -3,7 +3,7 @@ project(BezierCurve)
 
 find_package(OpenCV REQUIRED)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 23)
 
 add_executable(BezierCurve main.cpp)
 

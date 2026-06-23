@@ -1,4 +1,5 @@
 #include <chrono>
+#include <algorithm>
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
@@ -26,22 +27,55 @@ void naive_bezier(const std::vector<cv::Point2f> &points, cv::Mat &window)
         auto point = std::pow(1 - t, 3) * p_0 + 3 * t * std::pow(1 - t, 2) * p_1 +
                  3 * std::pow(t, 2) * (1 - t) * p_2 + std::pow(t, 3) * p_3;
 
-        window.at<cv::Vec3b>(point.y, point.x)[2] = 255;
+        window.at<cv::Vec3b>(point.y, point.x)[2] = 255; // 变红
     }
 }
 
+/// @brief 返回 control_points 线段中的 t 点
+/// @param control_points 
+/// @param t 
+/// @return 
 cv::Point2f recursive_bezier(const std::vector<cv::Point2f> &control_points, float t) 
 {
     // TODO: Implement de Casteljau's algorithm
-    return cv::Point2f();
-
+    int n = control_points.size();
+    while (n == 1) {
+        return control_points[0];
+    }
+    std::vector<cv::Point2f> smaller_cp(n - 1);
+    for (int i = 0; i < n - 1; ++i) {
+        smaller_cp[i] = control_points[i] * (1.f - t) + control_points[i + 1] * t;
+    }
+    return recursive_bezier(smaller_cp, t);
 }
 
 void bezier(const std::vector<cv::Point2f> &control_points, cv::Mat &window) 
 {
     // TODO: Iterate through all t = 0 to t = 1 with small steps, and call de Casteljau's 
     // recursive Bezier algorithm.
-
+    // 计算每个线段的 t 点 2x2 领域
+    for (float t = 0; t <= 1.0; t += 0.001) {
+        auto point = recursive_bezier(control_points, t); 
+        int left = static_cast<int>(std::floor(point.x));
+        int bottom = static_cast<int>(std::floor(point.y));
+        for (int x = left; x <= left + 1; ++x) {
+            for (int y = bottom; y <= bottom + 1; ++y) {
+                if (x < 0 || x >= window.cols || y < 0 || y >= window.rows) {
+                    continue;
+                }
+                float cx = x + 0.5f;
+                float cy = y + 0.5f;
+                // 计算权重
+                float distance = std::sqrt(
+                    (cx - point.x) * (cx - point.x) + (cy - point.y) * (cy - point.y)
+                );
+                float weight = std::max(0.f, 1.f - distance);
+                uchar color = static_cast<uchar>(255.f * weight);
+                auto& pixel = window.at<cv::Vec3b>(y, x);
+                pixel[1] = std::max(pixel[1], color);
+            }
+        }
+    }
 }
 
 int main() 
@@ -57,13 +91,13 @@ int main()
     {
         for (auto &point : control_points) 
         {
-            cv::circle(window, point, 3, {255, 255, 255}, 3);
+            cv::circle(window, point, 3, {255, 255, 255}, 3); // 画一个圆
         }
 
         if (control_points.size() == 4) 
         {
             naive_bezier(control_points, window);
-            //   bezier(control_points, window);
+            bezier(control_points, window);
 
             cv::imshow("Bezier Curve", window);
             cv::imwrite("my_bezier_curve.png", window);
@@ -76,5 +110,5 @@ int main()
         key = cv::waitKey(20);
     }
 
-return 0;
+    return 0;
 }
